@@ -1,0 +1,21 @@
+{
+  "name": "js-language-sqlite",
+  "version": "1.0.0",
+  "description": "A full parser and generator for SQL as implemented by SQLite3.",
+  "licenses": [{"type": "BSD"}],
+  "homepage": "http://ireneknapp.com/software/",
+  "author": {
+    "name": "Irene Knapp",
+    "url": "http://ireneknapp.com/",
+    "email": "irene.knapp@icloud.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/IreneKnapp/js-language-sqlite.git"
+  },
+  "main": "./js/main.js",
+  "dependencies": {
+    "underscore": ">= 1.4"
+  },
+  "engine": "node >= 0.8"
+}
