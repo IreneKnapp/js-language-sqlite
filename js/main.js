@@ -5,9 +5,29 @@ SQL.showTokens = function(item) {
     return item._showTokens();
 };
 
+SQL.string = function(items) {
+    if(_.isString(items)) return items;
+    else throw "String required.";
+}
+
+SQL.list = function(items) {
+    if(_.isArray(items)) return items;
+    else throw "Array required.";
+}
+
+SQL.maybe = function(subtype, items) {
+    if(_.isNull(items)) return null;
+    else return subtype(items);
+}
+
 SQL.oneOrMore = function(items) {
     if(_.isArray(items) && (items.length > 0)) return items;
     else throw "At least one item required.";
+};
+
+SQL.float = function(item) {
+    if(_.isNumber(item)) return item;
+    else throw "Float required.";
 };
 
 SQL.nonnegativeFloat = function(item) {
@@ -84,583 +104,822 @@ SQL.AST = {
         },
     },
     "TypeSizeField": {
-data TypeSizeField = DoubleSize MaybeSign NonnegativeDouble
-                   | IntegerSize MaybeSign Word64
+        constructors: {
+            "DoubleSize": {
+                "MaybeSign" "NonnegativeDouble"
+            },
+            "IntegerSize": {
+                "MaybeSign" "integer"
+            },
     },
     "LikeType": {
-data LikeType = Like
-              | NotLike
-              | Glob
-              | NotGlob
-              | Regexp
-              | NotRegexp
-              | Match
-              | NotMatch
+        constructors: {
+            "Like": {
+            },
+            "NotLike": {
+            },
+            "Glob": {
+            },
+            "NotGlob": {
+            },
+            "Regexp": {
+            },
+            "NotRegexp": {
+            },
+            "Match": {
+            },
+            "NotMatch": {
+            },
     },
     "Escape": {
-data Escape = NoEscape | Escape Expression
+        constructors: {
+            "NoEscape": {
+            },
+            "Escape": {
+                "Expression"
+            },
     },
     "MaybeSwitchExpression": {
-data MaybeSwitchExpression = NoSwitch | Switch Expression
-                             deriving (Eq, Show)
+        constructors: {
+            "NoSwitch": {
+            },
+            "Switch": {
+                "Expression"
+            },
     },
     "CasePair": {
-data CasePair = WhenThen Expression Expression
-                deriving (Eq, Show)
+        constructors: {
+            "WhenThen": {
+                "Expression" "Expression"
+            },
     },
     "Else": {
-data Else = NoElse
-          | Else Expression
+        constructors: {
+            "NoElse": {
+            },
+            "Else": {
+                "Expression"
+            },
     },
     "Expression": {
-data Expression = ExpressionLiteralInteger Word64
-                -- ^ Represents a literal integer expression.
-                | ExpressionLiteralFloat NonnegativeDouble
-                -- ^ Represents a literal floating-point expression.
-                | ExpressionLiteralString String
-                -- ^ Represents a literal string expression.
-                | ExpressionLiteralBlob BS.ByteString
-                -- ^ Represents a literal blob (binary large object) expression.
-                | ExpressionLiteralNull
-                -- ^ Represents a literal @NULL@ expression.
-                | ExpressionLiteralCurrentTime
-                -- ^ Represents a literal @current_time@ expression.
-                | ExpressionLiteralCurrentDate
-                -- ^ Represents a literal @current_date@ expression.
-                | ExpressionLiteralCurrentTimestamp
-                -- ^ Represents a literal @current_timestamp@ expression.
-                | ExpressionVariable
-                -- ^ Represents a positional-variable expression, written in SQL as @?@.
-                | ExpressionVariableN Word64
-                -- ^ Represents a numbered positional variable expression, written in
-                --   SQL as @?nnn@.
-                | ExpressionVariableNamed String
-                -- ^ Represents a named positional variable expression, written in
-                --   SQL as @:aaaa@.
-                | ExpressionIdentifier DoublyQualifiedIdentifier
-                -- ^ Represents a column-name expression, optionally qualified by a
-                --   table name and further by a database name.
-                | ExpressionUnaryNegative Expression
-                -- ^ Represents a unary negation expression.
-                | ExpressionUnaryPositive Expression
-                -- ^ Represents a unary positive-sign expression.  Yes, this is an nop.
-                | ExpressionUnaryBitwiseNot Expression
-                -- ^ Represents a unary bitwise negation expression.
-                | ExpressionUnaryLogicalNot Expression
-                -- ^ Represents a unary logical negation expression.
-                | ExpressionBinaryConcatenate Expression Expression
-                -- ^ Represents a binary string-concatenation expression.
-                | ExpressionBinaryMultiply Expression Expression
-                -- ^ Represents a binary multiplication expression.
-                | ExpressionBinaryDivide Expression Expression
-                -- ^ Represents a binary division expression.
-                | ExpressionBinaryModulus Expression Expression
-                -- ^ Represents a binary modulus expression.
-                | ExpressionBinaryAdd Expression Expression
-                -- ^ Represents a binary addition expression.
-                | ExpressionBinarySubtract Expression Expression
-                -- ^ Represents a binary subtraction expression.
-                | ExpressionBinaryLeftShift Expression Expression
-                -- ^ Represents a binary left-shift expression.
-                | ExpressionBinaryRightShift Expression Expression
-                -- ^ Represents a binary right-shift expression.
-                | ExpressionBinaryBitwiseAnd Expression Expression
-                -- ^ Represents a binary bitwise-and expression.
-                | ExpressionBinaryBitwiseOr Expression Expression
-                -- ^ Represents a binary bitwise-or expression.
-                | ExpressionBinaryLess Expression Expression
-                -- ^ Represents a binary less-than comparison expression.
-                | ExpressionBinaryLessEquals Expression Expression
-                -- ^ Represents a binary less-than-or-equal-to comparison expression.
-                | ExpressionBinaryGreater Expression Expression
-                -- ^ Represents a binary greater-than comparison expression.
-                | ExpressionBinaryGreaterEquals Expression Expression
-                -- ^ Represents a binary greater-than-or-equal-to comparison expression.
-                | ExpressionBinaryEquals Expression Expression
-                -- ^ Represents a binary equal-to comparison expression, written in SQL
-                --   as @=@.
-                | ExpressionBinaryEqualsEquals Expression Expression
-                -- ^ Represents a binary equal-to comparison expression, written in SQL
-                --   as @==@.
-                | ExpressionBinaryNotEquals Expression Expression
-                -- ^ Represents a binary not-equal-to comparison expression, written in
-                --   SQL as @!=@.
-                | ExpressionBinaryLessGreater Expression Expression
-                -- ^ Represents a binary not-equal-to comparison expression, written in
-                --   SQL as @<>@.
-                | ExpressionBinaryLogicalAnd Expression Expression
-                -- ^ Represents a binary logical-and expression.
-                | ExpressionBinaryLogicalOr Expression Expression
-                -- ^ Represents a binary logical-or expression.
-                | ExpressionFunctionCall UnqualifiedIdentifier [Expression]
-                -- ^ Represents a call to a built-in function.
-                | ExpressionFunctionCallDistinct UnqualifiedIdentifier
-                                                 (OneOrMore Expression)
-                -- ^ Represents a call to a built-in function, with the @DISTINCT@
-                --   qualifier.
-                | ExpressionFunctionCallStar UnqualifiedIdentifier
-                -- ^ Represents a call to a built-in function, with @*@ as 
-                --   parameter.
-                | ExpressionCast Expression Type
-                -- ^ Represents a type-cast expression.
-                | ExpressionCollate Expression UnqualifiedIdentifier
-                -- ^ Represents a @COLLATE@ expression.
-                | ExpressionLike Expression LikeType Expression Escape
-                -- ^ Represents a textual comparison expression.
-                | ExpressionIsnull Expression
-                -- ^ Represents an @ISNULL@ expression.  Not to be confused with an
-                --   @IS@ expression with a literal @NULL@ as its right side; the
-                --   meaning is the same but the parsing is different.
-                | ExpressionNotnull Expression
-                -- ^ Represents a @NOTNULL@ expression.  Not to be confused with a
-                --   @NOT NULL@ expression; the meaning is the same but the parsing is
-                --   different.
-                | ExpressionNotNull Expression
-                -- ^ Represents a @NOT NULL@ expression.  Not to be confused with a
-                --   @NOTNULL@ expression; the meaning is the same but the parsing is
-                --   different.
-                | ExpressionIs Expression Expression
-                -- ^ Represents an @IS@ expression.
-                | ExpressionIsNot Expression Expression
-                -- ^ Represents an @IS NOT@ expression.
-                | ExpressionBetween Expression Expression Expression
-                -- ^ Represents a @BETWEEN@ expression.
-                | ExpressionNotBetween Expression Expression Expression
-                -- ^ Represents a @NOT BETWEEN@ expression.
-                | ExpressionInSelect Expression (Select)
-                -- ^ Represents an @IN@ expression with the right-hand side being a
-                --   @SELECT@ statement.
-                | ExpressionNotInSelect Expression (Select)
-                -- ^ Represents a @NOT IN@ expression with the right-hand side being a
-                --   @SELECT@ statement.
-                | ExpressionInList Expression [Expression]
-                -- ^ Represents an @IN@ expression with the right-hand side being a
-                --   list of subexpressions.
-                | ExpressionNotInList Expression [Expression]
-                -- ^ Represents a @NOT IN@ expression with the right-hand side being a
-                --   list of subexpressions.
-                | ExpressionInTable Expression SinglyQualifiedIdentifier
-                -- ^ Represents an @IN@ expression with the right-hand side being a
-                --   table name, optionally qualified by a database name.
-                | ExpressionNotInTable Expression SinglyQualifiedIdentifier
-                -- ^ Represents a @NOT IN@ expression with the right-hand side being a
-                --   table name, optionally qualified by a database name.
-                | ExpressionSubquery (Select)
-                -- ^ Represents a subquery @SELECT@ expression.
-                | ExpressionExistsSubquery (Select)
-                -- ^ Represents a subquery @SELECT@ expression with the @EXISTS@
-                --   qualifier.
-                | ExpressionNotExistsSubquery (Select)
-                -- ^ Represents a subquery @SELECT@ expression with the @NOT EXISTS@
-                --   qualifier.
-                | ExpressionCase MaybeSwitchExpression
-                                 (OneOrMore CasePair)
-                                 Else
-                -- ^ Represents a @CASE@ expression.
-                | ExpressionRaiseIgnore
-                -- ^ Represents a @RAISE(IGNORE)@ expression.
-                | ExpressionRaiseRollback String
-                -- ^ Represents a @RAISE(ROLLBACK, string)@ expression.
-                | ExpressionRaiseAbort String
-                -- ^ Represents a @RAISE(ABORT, string)@ expression.
-                | ExpressionRaiseFail String
-                -- ^ Represents a @RAISE(FAIL, string)@ expression.
-                | ExpressionParenthesized Expression
-                -- ^ Represents a parenthesized subexpression.
+        constructors: {
+            "ExpressionLiteralInteger": {
+                "integer"
+            },
+            "ExpressionLiteralFloat": {
+                "NonnegativeDouble"
+            },
+            "ExpressionLiteralString": {
+                "string"
+            },
+            "ExpressionLiteralBlob": {
+                "string"
+            },
+            "ExpressionLiteralNull": {
+            },
+            "ExpressionLiteralCurrentTime": {
+            },
+            "ExpressionLiteralCurrentDate": {
+            },
+            "ExpressionLiteralCurrentTimestamp": {
+            },
+            "ExpressionVariable": {
+            },
+            "ExpressionVariableN": {
+                "integer"
+            },
+            "ExpressionVariableNamed": {
+                "string"
+            },
+            "ExpressionIdentifier": {
+                "DoublyQualifiedIdentifier"
+            },
+            "ExpressionUnaryNegative": {
+                "Expression"
+            },
+            "ExpressionUnaryPositive": {
+                "Expression"
+            },
+            "ExpressionUnaryBitwiseNot": {
+                "Expression"
+            },
+            "ExpressionUnaryLogicalNot": {
+                "Expression"
+            },
+            "ExpressionBinaryConcatenate": {
+                "Expression" "Expression"
+            },
+            "ExpressionBinaryMultiply": {
+                "Expression" "Expression"
+            },
+            "ExpressionBinaryDivide": {
+                "Expression" "Expression"
+            },
+            "ExpressionBinaryModulus": {
+                "Expression" "Expression"
+            },
+            "ExpressionBinaryAdd": {
+                "Expression" "Expression"
+            },
+            "ExpressionBinarySubtract": {
+                "Expression" "Expression"
+            },
+            "ExpressionBinaryLeftShift": {
+                "Expression" "Expression"
+            },
+            "ExpressionBinaryRightShift": {
+                "Expression" "Expression"
+            },
+            "ExpressionBinaryBitwiseAnd": {
+                "Expression" "Expression"
+            },
+            "ExpressionBinaryBitwiseOr": {
+                "Expression" "Expression"
+            },
+            "ExpressionBinaryLess": {
+                "Expression" "Expression"
+            },
+            "ExpressionBinaryLessEquals": {
+                "Expression" "Expression"
+            },
+            "ExpressionBinaryGreater": {
+                "Expression" "Expression"
+            },
+            "ExpressionBinaryGreaterEquals": {
+                "Expression" "Expression"
+            },
+            "ExpressionBinaryEquals": {
+                "Expression" "Expression"
+            },
+            "ExpressionBinaryEqualsEquals": {
+                "Expression" "Expression"
+            },
+            "ExpressionBinaryNotEquals": {
+                "Expression" "Expression"
+            },
+            "ExpressionBinaryLessGreater": {
+                "Expression" "Expression"
+            },
+            "ExpressionBinaryLogicalAnd": {
+                "Expression" "Expression"
+            },
+            "ExpressionBinaryLogicalOr": {
+                "Expression" "Expression"
+            },
+            "ExpressionFunctionCall": {
+                "UnqualifiedIdentifier" ["list", "Expression"]
+            },
+            "ExpressionFunctionCallDistinct": {
+                "UnqualifiedIdentifier" ["oneOrMore", "Expression"]
+            },
+            "ExpressionFunctionCallStar": {
+                "UnqualifiedIdentifier"
+            },
+            "ExpressionCast": {
+                "Expression" "Type"
+            },
+            "ExpressionCollate": {
+                "Expression" "UnqualifiedIdentifier"
+            },
+            "ExpressionLike": {
+                "Expression" "LikeType" "Expression" "Escape"
+            },
+            "ExpressionIsnull": {
+                "Expression"
+            },
+            "ExpressionNotnull": {
+                "Expression"
+            },
+            "ExpressionNotNull": {
+                "Expression"
+            },
+            "ExpressionIs": {
+                "Expression" "Expression"
+            },
+            "ExpressionIsNot": {
+                "Expression" "Expression"
+            },
+            "ExpressionBetween": {
+                "Expression" "Expression" "Expression"
+            },
+            "ExpressionNotBetween": {
+                "Expression" "Expression" "Expression"
+            },
+            "ExpressionInSelect": {
+                "Expression" (Select)
+            },
+            "ExpressionNotInSelect": {
+                "Expression" (Select)
+            },
+            "ExpressionInList": {
+                "Expression" ["list", "Expression"]
+            },
+            "ExpressionNotInList": {
+                "Expression" ["list", "Expression"]
+            },
+            "ExpressionInTable": {
+                "Expression" "SinglyQualifiedIdentifier"
+            },
+            "ExpressionNotInTable": {
+                "Expression" "SinglyQualifiedIdentifier"
+            },
+            "ExpressionSubquery": {
+                (Select)
+            },
+            "ExpressionExistsSubquery": {
+                (Select)
+            },
+            "ExpressionNotExistsSubquery": {
+                (Select)
+            },
+            "ExpressionCase": {
+                "MaybeSwitchExpression" ["oneOrMore", "CasePair"] "Else"
+            },
+            "ExpressionRaiseIgnore": {
+            },
+            "ExpressionRaiseRollback": {
+                "string"
+            },
+            "ExpressionRaiseAbort": {
+                "string"
+            },
+            "ExpressionRaiseFail": {
+                "string"
+            },
+            "ExpressionParenthesized": {
+                "Expression"
+            },
     },
     "MaybeUnique": {
-| NoUnique
-| Unique
+        constructors: {
+            "NoUnique": {
+            },
+            "Unique": {
+            },
     },
     "MaybeIfNotExists": {
-| NoIfNotExists
-| IfNotExists
+        constructors: {
+            "NoIfNotExists": {
+            },
+            "IfNotExists": {
+            },
     },
     "MaybeIfExists": {
-| NoIfExists
-| IfExists
+        constructors: {
+            "NoIfExists": {
+            },
+            "IfExists": {
+            },
     },
     "MaybeForEachRow": {
-| NoForEachRow
-| ForEachRow
+        constructors: {
+            "NoForEachRow": {
+            },
+            "ForEachRow": {
+            },
     },
     "MaybeTemporary": {
-| NoTemporary
-| Temp
-| Temporary
-    },
+        constructors: {
+            "NoTemporary": {
+            },
+            "Temp": {
+            },
+            "Temporary": {
+            },
     "MaybeCollation": {
-| NoCollation
-| Collation UnqualifiedIdentifier
+        constructors: {
+            "NoCollation": {
+            },
+            "Collation": {
+                "UnqualifiedIdentifier"
+            },
     },
     "MaybeAscDesc": {
-| NoAscDesc
-| Asc
-| Desc
-    },
+        constructors: {
+            "NoAscDesc": {
+            },
+            "Asc": {
+            },
+            "Desc": {
+            },
     "MaybeAutoIncrement": {
-| NoAutoincrement
-| Autoincrement
+        constructors: {
+            "NoAutoincrement": {
+            },
+            "Autoincrement": {
+            },
     },
     "MaybeSign": {
-| NoSign
-| PositiveSign
-| NegativeSign
-    },
+        constructors: {
+            "NoSign": {
+            },
+            "PositiveSign": {
+            },
+            "NegativeSign": {
+            },
     "MaybeColumn": {
-| ElidedColumn
-| Column
+        constructors: {
+            "ElidedColumn": {
+            },
+            "Column": {
+            },
     },
     "AlterTableBody": {
-| RenameTo UnqualifiedIdentifier
-| AddColumn MaybeColumn ColumnDefinition
+        constructors: {
+            "RenameTo": {
+                "UnqualifiedIdentifier"
+            },
+            "AddColumn": {
+                "MaybeColumn" "ColumnDefinition"
+            },
     },
     "ColumnDefinition": {
-| ColumnDefinition UnqualifiedIdentifier MaybeType [ColumnConstraint]
+        constructors: {
+            "ColumnDefinition": {
+                "UnqualifiedIdentifier" "MaybeType" ["list", "ColumnConstraint"]
+            },
     },
     "DefaultValue": {
-| DefaultValueSignedInteger MaybeSign Word64
-| DefaultValueSignedFloat MaybeSign NonnegativeDouble
-| DefaultValueLiteralString String
-| DefaultValueLiteralBlob BS.ByteString
-| DefaultValueLiteralNull
-| DefaultValueLiteralCurrentTime
-| DefaultValueLiteralCurrentDate
-| DefaultValueLiteralCurrentTimestamp
-| DefaultValueExpression Expression
+        constructors: {
+            "DefaultValueSignedInteger": {
+                "MaybeSign" "integer"
+            },
+            "DefaultValueSignedFloat": {
+                "MaybeSign" "NonnegativeDouble"
+            },
+            "DefaultValueLiteralString": {
+                "string"
+            },
+            "DefaultValueLiteralBlob": {
+                "string"
+            },
+            "DefaultValueLiteralNull": {
+            },
+            "DefaultValueLiteralCurrentTime": {
+            },
+            "DefaultValueLiteralCurrentDate": {
+            },
+            "DefaultValueLiteralCurrentTimestamp": {
+            },
+            "DefaultValueExpression": {
+                "Expression"
+            },
     },
     "IndexedColumn": {
-| IndexedColumn UnqualifiedIdentifier MaybeCollation MaybeAscDesc
+        constructors: {
+            "IndexedColumn": {
+                "UnqualifiedIdentifier" "MaybeCollation" "MaybeAscDesc"
+            },
     },
     "ColumnConstraint": {
-| ColumnPrimaryKey MaybeConstraintName MaybeAscDesc (Maybe ConflictClause) MaybeAutoincrement
-| ColumnNotNull MaybeConstraintName (Maybe ConflictClause)
-| ColumnUnique MaybeConstraintName (Maybe ConflictClause)
-| ColumnCheck MaybeConstraintName Expression
-| ColumnDefault MaybeConstraintName DefaultValue
-| ColumnCollate MaybeConstraintName UnqualifiedIdentifier
-| ColumnForeignKey MaybeConstraintName ForeignKeyClause
+        constructors: {
+            "ColumnPrimaryKey": {
+                "MaybeConstraintName" "MaybeAscDesc" ["maybe", "ConflictClause"] "MaybeAutoincrement"
+            },
+            "ColumnNotNull": {
+                "MaybeConstraintName" ["maybe", "ConflictClause"]
+            },
+            "ColumnUnique": {
+                "MaybeConstraintName" ["maybe", "ConflictClause"]
+            },
+            "ColumnCheck": {
+                "MaybeConstraintName" "Expression"
+            },
+            "ColumnDefault": {
+                "MaybeConstraintName" "DefaultValue"
+            },
+            "ColumnCollate": {
+                "MaybeConstraintName" "UnqualifiedIdentifier"
+            },
+            "ColumnForeignKey": {
+                "MaybeConstraintName" "ForeignKeyClause"
+            },
     },
     "TableConstraint": {
-| TablePrimaryKey MaybeConstraintName (OneOrMore IndexedColumn) (Maybe ConflictClause)
-| TableUnique MaybeConstraintName (OneOrMore IndexedColumn) (Maybe ConflictClause)
-| TableCheck MaybeConstraintName Expression
-| TableForeignKey MaybeConstraintName (OneOrMore UnqualifiedIdentifier) ForeignKeyClause
+        constructors: {
+            "TablePrimaryKey": {
+                "MaybeConstraintName" ["oneOrMore", "IndexedColumn"] ["maybe", "ConflictClause"]
+            },
+            "TableUnique": {
+                "MaybeConstraintName" ["oneOrMore", "IndexedColumn"] ["maybe", "ConflictClause"]
+            },
+            "TableCheck": {
+                "MaybeConstraintName" "Expression"
+            },
+            "TableForeignKey": {
+                "MaybeConstraintName" ["oneOrMore", "UnqualifiedIdentifier"] "ForeignKeyClause"
+            },
     },
     "MaybeConstraintName": {
-| NoConstraintName
-| ConstraintName UnqualifiedIdentifier
+        constructors: {
+            "NoConstraintName": {
+            },
+            "ConstraintName": {
+                "UnqualifiedIdentifier"
+            },
     },
     "TriggerTime": {
-| Before
-| After
-| InsteadOf
-    },
+        constructors: {
+            "Before": {
+            },
+            "After": {
+            },
+            "InsteadOf": {
+            },
     "TriggerCondition": {
-| DeleteOn
-| InsertOn
-| UpdateOn [UnqualifiedIdentifier]
+        constructors: {
+            "DeleteOn": {
+            },
+            "InsertOn": {
+            },
+            "UpdateOn": {
+                ["list", "UnqualifiedIdentifier"]
+            },
     },
     "ModuleArgument": {
-| ModuleArgument String
+        constructors: {
+            "ModuleArgument": {
+                "string"
+            },
     },
     "QualifiedTableName": {
-| TableNoIndexedBy SinglyQualifiedIdentifier
-| TableIndexedBy SinglyQualifiedIdentifier UnqualifiedIdentifier
-| TableNotIndexed SinglyQualifiedIdentifier
+        constructors: {
+            "TableNoIndexedBy": {
+                "SinglyQualifiedIdentifier"
+            },
+            "TableIndexedBy": {
+                "SinglyQualifiedIdentifier" "UnqualifiedIdentifier"
+            },
+            "TableNotIndexed": {
+                "SinglyQualifiedIdentifier"
+            },
     },
     "OrderingTerm": {
-| OrderingTerm Expression MaybeCollation MaybeAscDesc
+        constructors: {
+            "OrderingTerm": {
+                "Expression" "MaybeCollation" "MaybeAscDesc"
+            },
     },
     "PragmaBody": {
-| EmptyPragmaBody
-| EqualsPragmaBody PragmaValue
-| CallPragmaBody PragmaValue
+        constructors: {
+            "EmptyPragmaBody": {
+            },
+            "EqualsPragmaBody": {
+                "PragmaValue"
+            },
+            "CallPragmaBody": {
+                "PragmaValue"
+            },
     },
     "PragmaValue": {
-| SignedIntegerPragmaValue MaybeSign Word64
-| SignedFloatPragmaValue MaybeSign NonnegativeDouble
-| NamePragmaValue UnqualifiedIdentifier
-| StringPragmaValue String
+        constructors: {
+            "SignedIntegerPragmaValue": {
+                "MaybeSign" "integer"
+            },
+            "SignedFloatPragmaValue": {
+                "MaybeSign" "NonnegativeDouble"
+            },
+            "NamePragmaValue": {
+                "UnqualifiedIdentifier"
+            },
+            "StringPragmaValue": {
+                "string"
+            },
     },
     "CreateTableBody": {
-| ColumnsAndConstraints (OneOrMore ColumnDefinition) [TableConstraint]
-| AsSelect (Select)
+        constructors: {
+            "ColumnsAndConstraints": {
+                ["oneOrMore", "ColumnDefinition"] ["list", "TableConstraint"]
+            },
+            "AsSelect": {
+                (Select)
+            },
     },
     "InsertHead": {
-| InsertNoAlternative
-| InsertOrRollback
-| InsertOrAbort
-| InsertOrReplace
-| InsertOrFail
-| InsertOrIgnore
-| Replace
-    },
+        constructors: {
+            "InsertNoAlternative": {
+            },
+            "InsertOrRollback": {
+            },
+            "InsertOrAbort": {
+            },
+            "InsertOrReplace": {
+            },
+            "InsertOrFail": {
+            },
+            "InsertOrIgnore": {
+            },
+            "Replace": {
+            },
     "InsertBody": {
-| InsertValues [UnqualifiedIdentifier] (OneOrMore Expression)
-| InsertSelect [UnqualifiedIdentifier] (Select)
-| InsertDefaultValues
-    },
+        constructors: {
+            "InsertValues": {
+                ["list", "UnqualifiedIdentifier"] ["oneOrMore", "Expression"]
+            },
+            "InsertSelect": {
+                ["list", "UnqualifiedIdentifier"] (Select)
+            },
+            "InsertDefaultValues": {
+            },
     "UpdateHead": {
-| UpdateNoAlternative
-| UpdateOrRollback
-| UpdateOrAbort
-| UpdateOrReplace
-| UpdateOrFail
-| UpdateOrIgnore
-    },
+        constructors: {
+            "UpdateNoAlternative": {
+            },
+            "UpdateOrRollback": {
+            },
+            "UpdateOrAbort": {
+            },
+            "UpdateOrReplace": {
+            },
+            "UpdateOrFail": {
+            },
+            "UpdateOrIgnore": {
+            },
     "Distinctness": {
         constructors: {
             "NoDistinctness": {
-                | Distinct
-            }
+            },
+            "Distinct": {
+            },
             "All": {
-                "MaybeHaving": {
-            }
+            },
+    "MaybeHaving": {
+        constructors: {
             "NoHaving": {
-                | Having Expression
-            }
+            },
+            "Having": {
+                "Expression"
+            },
     "MaybeAs": {
         constructors: {
             "NoAs": {
-                | As UnqualifiedIdentifier
-            }
+            },
+            "As": {
+                "UnqualifiedIdentifier"
+            },
             "ElidedAs": {
-                UnqualifiedIdentifier
-            }
+                "UnqualifiedIdentifier"
+            },
     "CompoundOperator": {
         constructors: {
             "Union": {
-                | UnionAll
-            }
+            },
+            "UnionAll": {
+            },
             "Intersect": {
-                | Except
-            }
+            },
+            "Except": {
+            },
     "SelectCore": {
         constructors: {
             "SelectCore": {
-                Distinctness (OneOrMore ResultColumn) (Maybe FromClause) (Maybe WhereClause) (Maybe GroupClause)
-            }
+                "Distinctness" ["oneOrMore", "ResultColumn"] ["maybe", "FromClause"] ["maybe", "WhereClause"] ["maybe", "GroupClause"]
+            },
     "ResultColumn": {
         constructors: {
             "Star": {
-                | TableStar UnqualifiedIdentifier
-            }
+            },
+            "TableStar": {
+                "UnqualifiedIdentifier"
+            },
             "Result": {
-                Expression MaybeAs
-            }
-                    deriving (Eq, Show)
+                "Expression" "MaybeAs"
+            },
     "JoinSource": {
         constructors: {
             "JoinSource": {
-                SingleSource [(JoinOperation, SingleSource, JoinConstraint)]
-            }
-                  deriving (Eq, Show)
+                "SingleSource" ["list", ["triple", "JoinOperation", "SingleSource", "JoinConstraint"]]
+            },
     "SingleSource": {
         constructors: {
             "TableSource": {
-                SinglyQualifiedIdentifier MaybeAs MaybeIndexedBy
-            }
+                "SinglyQualifiedIdentifier" "MaybeAs" "MaybeIndexedBy"
+            },
             "SelectSource": {
-                (Select) MaybeAs
-            }
+                (Select) "MaybeAs"
+            },
             "SubjoinSource": {
-                JoinSource
-            }
+                "JoinSource"
+            },
     "JoinOperation": {
         constructors: {
             "Comma": {
-                | Join
-            }
+            },
+            "Join": {
+            },
             "OuterJoin": {
-                | LeftJoin
-            }
+            },
+            "LeftJoin": {
+            },
             "LeftOuterJoin": {
-                | InnerJoin
-            }
+            },
+            "InnerJoin": {
+            },
             "CrossJoin": {
-                | NaturalJoin
-            }
+            },
+            "NaturalJoin": {
+            },
             "NaturalOuterJoin": {
-                | NaturalLeftJoin
-            }
+            },
+            "NaturalLeftJoin": {
+            },
             "NaturalLeftOuterJoin": {
-                | NaturalInnerJoin
-            }
+            },
+            "NaturalInnerJoin": {
+            },
             "NaturalCrossJoin": {
-                "JoinConstraint": {
-            }
+            },
+    "JoinConstraint": {
+        constructors: {
             "NoConstraint": {
-                | On Expression
-            }
+            },
+            "On": {
+                "Expression"
+            },
             "Using": {
-                (OneOrMore UnqualifiedIdentifier)
-            }
+                ["oneOrMore", "UnqualifiedIdentifier"]
+            },
     "MaybeIndexedBy": {
         constructors: {
             "NoIndexedBy": {
-                | IndexedBy UnqualifiedIdentifier
-            }
+            },
+            "IndexedBy": {
+                "UnqualifiedIdentifier"
+            },
             "NotIndexed": {
-                "FromClause": {
-            }
+            },
+    "FromClause": {
+        constructors: {
             "From": {
-                JoinSource
-            }
+                "JoinSource"
+            },
     "WhereClause": {
         constructors: {
             "Where": {
-                Expression
-            }
+                "Expression"
+            },
     "GroupClause": {
         constructors: {
             "GroupBy": {
-                (OneOrMore OrderingTerm) MaybeHaving
-            }
+                ["oneOrMore", "OrderingTerm"] "MaybeHaving"
+            },
     "OrderClause": {
         constructors: {
             "OrderBy": {
-                (OneOrMore OrderingTerm)
-            }
+                ["oneOrMore", "OrderingTerm"]
+            },
     "LimitClause": {
         constructors: {
             "Limit": {
-                Word64
-            }
+                "integer"
+            },
             "LimitOffset": {
-                Word64 Word64
-            }
+                "integer" "integer"
+            },
             "LimitComma": {
-                Word64 Word64
-            }
+                "integer" "integer"
+            },
     "WhenClause": {
         constructors: {
             "When": {
-                Expression
-            }
+                "Expression"
+            },
     "ConflictClause": {
         constructors: {
             "OnConflictRollback": {
-                | OnConflictAbort
-            }
+            },
+            "OnConflictAbort": {
+            },
             "OnConflictFail": {
-                | OnConflictIgnore
-            }
+            },
+            "OnConflictIgnore": {
+            },
             "OnConflictReplace": {
-                "ForeignKeyClause": {
-            }
+            },
+    "ForeignKeyClause": {
+        constructors: {
             "References": {
-                UnqualifiedIdentifier [UnqualifiedIdentifier] [ForeignKeyClauseActionOrMatchPart] MaybeForeignKeyClauseDeferrablePart
-            }
+                "UnqualifiedIdentifier" ["list", "UnqualifiedIdentifier"] ["list", "ForeignKeyClauseActionOrMatchPart"] "MaybeForeignKeyClauseDeferrablePart"
+            },
     "ForeignKeyClauseActionOrMatchPart": {
         constructors: {
             "OnDelete": {
-                ForeignKeyClauseActionPart
-            }
+                "ForeignKeyClauseActionPart"
+            },
             "OnUpdate": {
-                ForeignKeyClauseActionPart
-            }
+                "ForeignKeyClauseActionPart"
+            },
             "ReferencesMatch": {
-                UnqualifiedIdentifier
-            }
+                "UnqualifiedIdentifier"
+            },
     "ForeignKeyClauseActionPart": {
         constructors: {
             "SetNull": {
-                | SetDefault
-            }
+            },
+            "SetDefault": {
+            },
             "Cascade": {
-                | Restrict
-            }
+            },
+            "Restrict": {
+            },
             "NoAction": {
-                "MaybeForeignKeyClauseDeferrablePart": {
-            }
+            },
+    "MaybeForeignKeyClauseDeferrablePart": {
+        constructors: {
             "NoDeferrablePart": {
-                | Deferrable MaybeInitialDeferralStatus
-            }
+            },
+            "Deferrable": {
+                "MaybeInitialDeferralStatus"
+            },
             "NotDeferrable": {
-                MaybeInitialDeferralStatus
-            }
+                "MaybeInitialDeferralStatus"
+            },
     "MaybeInitialDeferralStatus": {
         constructors: {
             "NoInitialDeferralStatus": {
-                | InitiallyDeferred
-            }
+            },
+            "InitiallyDeferred": {
+            },
             "InitiallyImmediate": {
-                "CommitHead": {
-            }
+            },
+    "CommitHead": {
+        constructors: {
             "CommitCommit": {
-                | CommitEnd
-            }
+            },
+            "CommitEnd": {
     "MaybeTransaction": {
         constructors: {
             "ElidedTransaction": {
-                | Transaction
-            }
+            },
+            "Transaction": {
     "MaybeTransactionType": {
         constructors: {
             "NoTransactionType": {
-                | Deferred
-            }
+            },
+            "Deferred": {
+            },
             "Immediate": {
-                | Exclusive
-            }
+            },
+            "Exclusive": {
     "MaybeDatabase": {
         constructors: {
             "ElidedDatabase": {
-                | Database
-            }
+            },
+            "Database": {
     "MaybeSavepoint": {
         constructors: {
             "NoSavepoint": {
-                | To UnqualifiedIdentifier
-            }
+            },
+            "To": {
+                "UnqualifiedIdentifier"
+            },
             "ToSavepoint": {
-                UnqualifiedIdentifier
-            }
+                "UnqualifiedIdentifier"
+            },
     "MaybeReleaseSavepoint": {
         constructors: {
             "ElidedReleaseSavepoint": {
-                UnqualifiedIdentifier
-            }
+                "UnqualifiedIdentifier"
+            },
             "ReleaseSavepoint": {
-                UnqualifiedIdentifier
-            }
+                "UnqualifiedIdentifier"
+            },
     "StatementList": {
         constructors: {
             "StatementList": {
-                [AnyStatement]
-            }
+                ["list", "AnyStatement"]
+            },
     "AnyStatement": {
         constructors: {
             "Statement": {
-                Statement
-            }
+                "Statement"
+            },
     "ExplainableStatement": {
         constructors: {
             "ExplainableStatement": {
-                Statement
-            }
+                "Statement"
+            },
     "TriggerStatement": {
         constructors: {
             "TriggerStatement": {
-                Statement
-            }
+                "Statement"
+            },
     "UnqualifiedIdentifier": {
         constructors: {
             "UnqualifiedIdentifier": {
-                String
-            }
+                "string"
+            },
     "SinglyQualifiedIdentifier": {
         constructors: {
             "SinglyQualifiedIdentifier": {
-                (Maybe String) String
-            }
+                ["maybe", "string"] "string"
+            },
     "DoublyQualifiedIdentifier": {
         constructors: {
             "DoublyQualifiedIdentifier": {
-                (Maybe (String, (Maybe String))) String
-            }
-        }
+                ["maybe", ["pair", "string", ["maybe", "string"]]], "string"
+            },
+        },
 /*
 data Statement level triggerable valueReturning which where
     Explain
@@ -694,7 +953,7 @@ data Statement level triggerable valueReturning which where
         -> MaybeIfNotExists
         -> SinglyQualifiedIdentifier
         -> UnqualifiedIdentifier
-        -> (OneOrMore IndexedColumn)
+        -> ["oneOrMore", "IndexedColumn"]
         -> Statement L0 NT NS CreateIndex'
     CreateTable
         :: MaybeTemporary
@@ -710,8 +969,8 @@ data Statement level triggerable valueReturning which where
         -> TriggerCondition
         -> UnqualifiedIdentifier
         -> MaybeForEachRow
-        -> (Maybe WhenClause)
-        -> (OneOrMore TriggerStatement)
+        -> ["maybe", "WhenClause"]
+        -> ["oneOrMore", "TriggerStatement"]
         -> Statement L0 NT NS CreateTrigger'
     CreateView
         :: MaybeTemporary
@@ -722,16 +981,16 @@ data Statement level triggerable valueReturning which where
     CreateVirtualTable
         :: SinglyQualifiedIdentifier
         -> UnqualifiedIdentifier
-        -> [ModuleArgument]
+        -> ["list", "ModuleArgument"]
         -> Statement L0 NT NS CreateVirtualTable'
     Delete
         :: QualifiedTableName
-        -> (Maybe WhereClause)
+        -> ["maybe", "WhereClause"]
         -> Statement L0 T NS Delete'
     DeleteLimited
         :: QualifiedTableName
-        -> (Maybe WhereClause)
-        -> (Maybe OrderClause)
+        -> ["maybe", "WhereClause"]
+        -> ["maybe", "OrderClause"]
         -> LimitClause
         -> Statement L0 NT NS DeleteLimited'
     Detach
@@ -780,21 +1039,21 @@ data Statement level triggerable valueReturning which where
     Select
         :: SelectCore
         -> [(CompoundOperator, SelectCore)]
-        -> (Maybe OrderClause)
-        -> (Maybe LimitClause)
+        -> ["maybe", "OrderClause"]
+        -> ["maybe", "LimitClause"]
         -> Statement L0 T S Select'
     Update
         :: UpdateHead
         -> QualifiedTableName
         -> (OneOrMore (UnqualifiedIdentifier, Expression))
-        -> (Maybe WhereClause)
+        -> ["maybe", "WhereClause"]
         -> Statement L0 T NS Update'
     UpdateLimited
         :: UpdateHead
         -> QualifiedTableName
         -> (OneOrMore (UnqualifiedIdentifier, Expression))
-        -> (Maybe WhereClause)
-        -> (Maybe OrderClause)
+        -> ["maybe", "WhereClause"]
+        -> ["maybe", "OrderClause"]
         -> LimitClause
         -> Statement L0 NT NS UpdateLimited'
     Vacuum
@@ -975,7 +1234,7 @@ instance Show Token where
                                  then (isAlphaNum c) || (elem c "_$")
                                  else True
             escapeCharacter '"' = "\"\""
-            escapeCharacter c = [c]
+            escapeCharacter c = ["list", "c"]
         in if (all validCharacter identifier) && (not $ elem identifier keywordList)
              then identifier
              else "\"" ++ (concat $ map escapeCharacter identifier) ++ "\""
@@ -984,12 +1243,12 @@ instance Show Token where
     show (LiteralString string) =
         let showChar char = case char of
                               '\'' -> "''"
-                              _ -> [char]
+                              _ -> ["list", "char"]
             showString string = concat $ map showChar string
         in "'" ++ showString string ++ "'"
     show (LiteralBlob bytestring) =
         let showWord word = case showHex word "" of
-                              [a] -> ['0', a]
+                              ["list", "a"] -> ['0', a]
                               a -> a
             showBytestring bytestring = concat $ map showWord $ BS.unpack bytestring
         in "x'" ++ showBytestring bytestring ++ "'"
@@ -1163,7 +1422,7 @@ instance Show Token where
         = show firstToken ++ " " ++ show rest ++ string
 
 
-keywordList :: [String]
+keywordList :: ["list", "string"]
 keywordList
     = ["ABORT", "ACTION", "ADD", "AFTER", "ALL", "ALTER", "ANALYZE", "AND", "AS",
        "ASC", "ATTACH", "AUTOINCREMENT", "BEFORE", "BEGIN", "BETWEEN", "BY", "CASCADE",
