@@ -2,7 +2,9 @@ var _ = require("underscore");
 var SQL = {};
 
 SQL.showTokens = function(item) {
-    return item._showTokens();
+    if(_.isArray(item)) {
+        return SQL.AST[item[0]].showTokens.apply(item.slice(1));
+    } else throw "Array required.";
 };
 
 SQL.string = function(items) {
@@ -48,6 +50,13 @@ SQL.AST = {
         constructors: {
             "Type": {
                 values: ["TypeAffinity", "MaybeTypeName", "MaybeTypeSize"],
+                showTokens: function(affinity, name, maybeTypeSize) {
+                    return _.flatten([(name[0] == "NoTypeName")
+                                      ? SQL.showTokens(affinity)
+                                      : SQL.showTokens(name),
+                                      SQL.showTokens(maybeTypeSize)],
+                                     true);
+                },
             },
         },
     },
@@ -55,18 +64,41 @@ SQL.AST = {
         constructors: {
             "TypeAffinityText": {
                 values: [],
+                showTokens: function() {
+                    return SQL.showTokens(["TypeName",
+                            SQL.oneOrMore([["UnqualifiedIdentifier",
+                                            "TEXT"]])]);
+                },
             },
             "TypeAffinityNumeric": {
                 values: [],
+                showTokens: function() {
+                    return SQL.showTokens(["TypeName",
+                            SQL.oneOrMore([["UnqualifiedIdentifier",
+                                            "NUMERIC"]])]);
+                },
             },
             "TypeAffinityInteger": {
                 values: [],
+                showTokens: function() {
+                    return SQL.showTokens(["TypeName",
+                            SQL.oneOrMore([["UnqualifiedIdentifier",
+                                            "INTEGER"]])]);
+                },
             },
             "TypeAffinityReal": {
                 values: [],
+                showTokens: function() {
+                    return SQL.showTokens(["TypeName",
+                            SQL.oneOrMore([["UnqualifiedIdentifier",
+                                            "REAL"]])]);
+                },
             },
             "TypeAffinityNone": {
                 values: [],
+                showTokens: function() {
+                    return SQL.showTokens(["NoTypeName"]]);
+                },
             },
         },
     },
@@ -74,9 +106,15 @@ SQL.AST = {
         constructors: {
             "NoTypeName": {
                 values: [],
+                showTokens: function() {
+                    return [];
+                },
             },
             "TypeName": {
                 values: [["oneOrMore", "UnqualifiedIdentifier"]],
+                showTokens: function(identifiers) {
+                    return _.flatten(_.map(identifiers, SQL.showTokens), true);
+                },
             },
         },
     },
@@ -84,9 +122,15 @@ SQL.AST = {
         constructors: {
             "NoType": {
                 values: [],
+                showTokens: function() {
+                    return [];
+                },
             },
             "JustType": {
                 values: ["Type"],
+                showTokens: function(type) {
+                    return SQL.showTokens(type);
+                },
             },
         },
     },
@@ -94,971 +138,1211 @@ SQL.AST = {
         constructors: {
             "NoTypeSize": {
                 values: [],
+                showTokens: function() {
+                    return [];
+                },
             },
             "TypeMaximumSize": {
                 values: ["TypeSizeField"],
+                showTokens: function(maximumSize) {
+                    return _.flatten([[[PunctuationLeftParenthesis]],
+                                      SQL.showTokens(maximumSize),
+                                      [[PunctuationRightParenthesis]]],
+                                     true);
+                },
             },
             "TypeSize": {
                 values: ["TypeSizeField", "TypeSizeField"],
+                showTokens: function(minimumSize, maximumSize) {
+                    return _.flatten([[[PunctuationLeftParenthesis]],
+                                      SQL.showTokens(minimumSize),
+                                      [[PunctuationComma]],
+                                      SQL.showTokens(maximumSize),
+                                      [[PunctuationRightParenthesis]]],
+                                     true);
+                },
             },
         },
     },
     "TypeSizeField": {
         constructors: {
             "DoubleSize": {
-                "MaybeSign" "NonnegativeDouble"
+                values: ["MaybeSign", "NonnegativeDouble"],
+                showTokens: function(maybeSign, nonnegativeDouble) {
+                    return _.flatten([SQL.showTokens(maybeSign),
+                                      [[LiteralFloat, nonnegativeDouble]]],
+                                     true);
+                },
             },
             "IntegerSize": {
-                "MaybeSign" "integer"
+                values: ["MaybeSign", "integer"],
+                showTokens: function(maybeSign, word) {
+                    return _.flatten([SQL.showTokens(maybeSign),
+                                      [[LiteralInteger, word]]],
+                                     true);
+                },
             },
+        },
     },
     "LikeType": {
         constructors: {
             "Like": {
+                values: [],
             },
             "NotLike": {
+                values: [],
             },
             "Glob": {
+                values: [],
             },
             "NotGlob": {
+                values: [],
             },
             "Regexp": {
+                values: [],
             },
             "NotRegexp": {
+                values: [],
             },
             "Match": {
+                values: [],
             },
             "NotMatch": {
+                values: [],
             },
+        },
     },
     "Escape": {
         constructors: {
             "NoEscape": {
+                values: [],
             },
             "Escape": {
-                "Expression"
+                values: ["Expression"],
             },
+        },
     },
     "MaybeSwitchExpression": {
         constructors: {
             "NoSwitch": {
+                values: [],
             },
             "Switch": {
-                "Expression"
+                values: ["Expression"],
             },
+        },
     },
     "CasePair": {
         constructors: {
             "WhenThen": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
+        },
     },
     "Else": {
         constructors: {
             "NoElse": {
+                values: [],
             },
             "Else": {
-                "Expression"
+                values: ["Expression"],
             },
+        },
     },
     "Expression": {
         constructors: {
             "ExpressionLiteralInteger": {
-                "integer"
+                values: ["integer"],
             },
             "ExpressionLiteralFloat": {
-                "NonnegativeDouble"
+                values: ["NonnegativeDouble"],
             },
             "ExpressionLiteralString": {
-                "string"
+                values: ["string"],
             },
             "ExpressionLiteralBlob": {
-                "string"
+                values: ["string"],
             },
             "ExpressionLiteralNull": {
+                values: [],
             },
             "ExpressionLiteralCurrentTime": {
+                values: [],
             },
             "ExpressionLiteralCurrentDate": {
+                values: [],
             },
             "ExpressionLiteralCurrentTimestamp": {
+                values: [],
             },
             "ExpressionVariable": {
+                values: [],
             },
             "ExpressionVariableN": {
-                "integer"
+                values: ["integer"],
             },
             "ExpressionVariableNamed": {
-                "string"
+                values: ["string"],
             },
             "ExpressionIdentifier": {
-                "DoublyQualifiedIdentifier"
+                values: ["DoublyQualifiedIdentifier"],
             },
             "ExpressionUnaryNegative": {
-                "Expression"
+                values: ["Expression"],
             },
             "ExpressionUnaryPositive": {
-                "Expression"
+                values: ["Expression"],
             },
             "ExpressionUnaryBitwiseNot": {
-                "Expression"
+                values: ["Expression"],
             },
             "ExpressionUnaryLogicalNot": {
-                "Expression"
+                values: ["Expression"],
             },
             "ExpressionBinaryConcatenate": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
             "ExpressionBinaryMultiply": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
             "ExpressionBinaryDivide": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
             "ExpressionBinaryModulus": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
             "ExpressionBinaryAdd": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
             "ExpressionBinarySubtract": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
             "ExpressionBinaryLeftShift": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
             "ExpressionBinaryRightShift": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
             "ExpressionBinaryBitwiseAnd": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
             "ExpressionBinaryBitwiseOr": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
             "ExpressionBinaryLess": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
             "ExpressionBinaryLessEquals": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
             "ExpressionBinaryGreater": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
             "ExpressionBinaryGreaterEquals": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
             "ExpressionBinaryEquals": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
             "ExpressionBinaryEqualsEquals": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
             "ExpressionBinaryNotEquals": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
             "ExpressionBinaryLessGreater": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
             "ExpressionBinaryLogicalAnd": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
             "ExpressionBinaryLogicalOr": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
             "ExpressionFunctionCall": {
-                "UnqualifiedIdentifier" ["list", "Expression"]
+                values: ["UnqualifiedIdentifier", ["list", "Expression"]],
             },
             "ExpressionFunctionCallDistinct": {
-                "UnqualifiedIdentifier" ["oneOrMore", "Expression"]
+                values: ["UnqualifiedIdentifier", ["oneOrMore", "Expression"]],
             },
             "ExpressionFunctionCallStar": {
-                "UnqualifiedIdentifier"
+                values: ["UnqualifiedIdentifier"],
             },
             "ExpressionCast": {
-                "Expression" "Type"
+                values: ["Expression", "Type"],
             },
             "ExpressionCollate": {
-                "Expression" "UnqualifiedIdentifier"
+                values: ["Expression", "UnqualifiedIdentifier"],
             },
             "ExpressionLike": {
-                "Expression" "LikeType" "Expression" "Escape"
+                values: ["Expression", "LikeType", "Expression", "Escape"],
             },
             "ExpressionIsnull": {
-                "Expression"
+                values: ["Expression"],
             },
             "ExpressionNotnull": {
-                "Expression"
+                values: ["Expression"],
             },
             "ExpressionNotNull": {
-                "Expression"
+                values: ["Expression"],
             },
             "ExpressionIs": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
             "ExpressionIsNot": {
-                "Expression" "Expression"
+                values: ["Expression", "Expression"],
             },
             "ExpressionBetween": {
-                "Expression" "Expression" "Expression"
+                values: ["Expression", "Expression", "Expression"],
             },
             "ExpressionNotBetween": {
-                "Expression" "Expression" "Expression"
+                values: ["Expression", "Expression", "Expression"],
             },
             "ExpressionInSelect": {
-                "Expression" (Select)
+                values: ["Expression", ["Statement", "Select"]],
             },
             "ExpressionNotInSelect": {
-                "Expression" (Select)
+                values: ["Expression", ["Statement", "Select"]],
             },
             "ExpressionInList": {
-                "Expression" ["list", "Expression"]
+                values: ["Expression", ["list", "Expression"]],
             },
             "ExpressionNotInList": {
-                "Expression" ["list", "Expression"]
+                values: ["Expression", ["list", "Expression"]],
             },
             "ExpressionInTable": {
-                "Expression" "SinglyQualifiedIdentifier"
+                values: ["Expression", "SinglyQualifiedIdentifier"],
             },
             "ExpressionNotInTable": {
-                "Expression" "SinglyQualifiedIdentifier"
+                values: ["Expression", "SinglyQualifiedIdentifier"],
             },
             "ExpressionSubquery": {
-                (Select)
+                values: [(Select)],
             },
             "ExpressionExistsSubquery": {
-                (Select)
+                values: [(Select)],
             },
             "ExpressionNotExistsSubquery": {
-                (Select)
+                values: [(Select)],
             },
             "ExpressionCase": {
-                "MaybeSwitchExpression" ["oneOrMore", "CasePair"] "Else"
+                values: ["MaybeSwitchExpression", ["oneOrMore", "CasePair"], "Else"],
             },
             "ExpressionRaiseIgnore": {
+                values: [],
             },
             "ExpressionRaiseRollback": {
-                "string"
+                values: ["string"],
             },
             "ExpressionRaiseAbort": {
-                "string"
+                values: ["string"],
             },
             "ExpressionRaiseFail": {
-                "string"
+                values: ["string"],
             },
             "ExpressionParenthesized": {
-                "Expression"
+                values: ["Expression"],
             },
+        },
     },
     "MaybeUnique": {
         constructors: {
             "NoUnique": {
+                values: [],
             },
             "Unique": {
+                values: [],
             },
+        },
     },
     "MaybeIfNotExists": {
         constructors: {
             "NoIfNotExists": {
+                values: [],
             },
             "IfNotExists": {
+                values: [],
             },
+        },
     },
     "MaybeIfExists": {
         constructors: {
             "NoIfExists": {
+                values: [],
             },
             "IfExists": {
+                values: [],
             },
+        },
     },
     "MaybeForEachRow": {
         constructors: {
             "NoForEachRow": {
+                values: [],
             },
             "ForEachRow": {
+                values: [],
             },
+        },
     },
     "MaybeTemporary": {
         constructors: {
             "NoTemporary": {
+                values: [],
             },
             "Temp": {
+                values: [],
             },
             "Temporary": {
+                values: [],
             },
+        },
+    },
     "MaybeCollation": {
         constructors: {
             "NoCollation": {
+                values: [],
             },
             "Collation": {
-                "UnqualifiedIdentifier"
+                values: ["UnqualifiedIdentifier"],
             },
+        },
     },
     "MaybeAscDesc": {
         constructors: {
             "NoAscDesc": {
+                values: [],
             },
             "Asc": {
+                values: [],
             },
             "Desc": {
+                values: [],
             },
+        },
+    },
     "MaybeAutoIncrement": {
         constructors: {
             "NoAutoincrement": {
+                values: [],
             },
             "Autoincrement": {
+                values: [],
             },
+        },
     },
     "MaybeSign": {
         constructors: {
             "NoSign": {
+                values: [],
             },
             "PositiveSign": {
+                values: [],
             },
             "NegativeSign": {
+                values: [],
             },
+        },
+    },
     "MaybeColumn": {
         constructors: {
             "ElidedColumn": {
+                values: [],
             },
             "Column": {
+                values: [],
             },
+        },
     },
     "AlterTableBody": {
         constructors: {
             "RenameTo": {
-                "UnqualifiedIdentifier"
+                values: ["UnqualifiedIdentifier"],
             },
             "AddColumn": {
-                "MaybeColumn" "ColumnDefinition"
+                values: ["MaybeColumn", "ColumnDefinition"],
             },
+        },
     },
     "ColumnDefinition": {
         constructors: {
             "ColumnDefinition": {
-                "UnqualifiedIdentifier" "MaybeType" ["list", "ColumnConstraint"]
+                values: ["UnqualifiedIdentifier", "MaybeType", ["list", "ColumnConstraint"]],
             },
+        },
     },
     "DefaultValue": {
         constructors: {
             "DefaultValueSignedInteger": {
-                "MaybeSign" "integer"
+                values: ["MaybeSign", "integer"],
             },
             "DefaultValueSignedFloat": {
-                "MaybeSign" "NonnegativeDouble"
+                values: ["MaybeSign", "NonnegativeDouble"],
             },
             "DefaultValueLiteralString": {
-                "string"
+                values: ["string"],
             },
             "DefaultValueLiteralBlob": {
-                "string"
+                values: ["string"],
             },
             "DefaultValueLiteralNull": {
+                values: [],
             },
             "DefaultValueLiteralCurrentTime": {
+                values: [],
             },
             "DefaultValueLiteralCurrentDate": {
+                values: [],
             },
             "DefaultValueLiteralCurrentTimestamp": {
+                values: [],
             },
             "DefaultValueExpression": {
-                "Expression"
+                values: ["Expression"],
             },
+        },
     },
     "IndexedColumn": {
         constructors: {
             "IndexedColumn": {
-                "UnqualifiedIdentifier" "MaybeCollation" "MaybeAscDesc"
+                values: ["UnqualifiedIdentifier", "MaybeCollation",
+                         "MaybeAscDesc"],
             },
+        },
     },
     "ColumnConstraint": {
         constructors: {
             "ColumnPrimaryKey": {
-                "MaybeConstraintName" "MaybeAscDesc" ["maybe", "ConflictClause"] "MaybeAutoincrement"
+                values: ["MaybeConstraintName", "MaybeAscDesc", ["maybe", "ConflictClause"],
+                         "MaybeAutoincrement"],
             },
             "ColumnNotNull": {
-                "MaybeConstraintName" ["maybe", "ConflictClause"]
+                values: ["MaybeConstraintName", ["maybe", "ConflictClause"]],
             },
             "ColumnUnique": {
-                "MaybeConstraintName" ["maybe", "ConflictClause"]
+                values: ["MaybeConstraintName", ["maybe", "ConflictClause"]],
             },
             "ColumnCheck": {
-                "MaybeConstraintName" "Expression"
+                values: ["MaybeConstraintName", "Expression"],
             },
             "ColumnDefault": {
-                "MaybeConstraintName" "DefaultValue"
+                values: ["MaybeConstraintName", "DefaultValue"],
             },
             "ColumnCollate": {
-                "MaybeConstraintName" "UnqualifiedIdentifier"
+                values: ["MaybeConstraintName", "UnqualifiedIdentifier"],
             },
             "ColumnForeignKey": {
-                "MaybeConstraintName" "ForeignKeyClause"
+                values: ["MaybeConstraintName", "ForeignKeyClause"],
             },
+        },
     },
     "TableConstraint": {
         constructors: {
             "TablePrimaryKey": {
-                "MaybeConstraintName" ["oneOrMore", "IndexedColumn"] ["maybe", "ConflictClause"]
+                values: ["MaybeConstraintName", ["oneOrMore", "IndexedColumn"],
+                         ["maybe", "ConflictClause"]],
             },
             "TableUnique": {
-                "MaybeConstraintName" ["oneOrMore", "IndexedColumn"] ["maybe", "ConflictClause"]
+                values: ["MaybeConstraintName", ["oneOrMore", "IndexedColumn"],
+                         ["maybe", "ConflictClause"]],
             },
             "TableCheck": {
-                "MaybeConstraintName" "Expression"
+                values: ["MaybeConstraintName", "Expression"],
             },
             "TableForeignKey": {
-                "MaybeConstraintName" ["oneOrMore", "UnqualifiedIdentifier"] "ForeignKeyClause"
+                values: ["MaybeConstraintName", ["oneOrMore", "UnqualifiedIdentifier"],
+                         "ForeignKeyClause"],
             },
+        },
     },
     "MaybeConstraintName": {
         constructors: {
             "NoConstraintName": {
+                values: [],
             },
             "ConstraintName": {
-                "UnqualifiedIdentifier"
+                values: ["UnqualifiedIdentifier"],
             },
+        },
     },
     "TriggerTime": {
         constructors: {
             "Before": {
+                values: [],
             },
             "After": {
+                values: [],
             },
             "InsteadOf": {
+                values: [],
             },
+        },
+    },
     "TriggerCondition": {
         constructors: {
             "DeleteOn": {
+                values: [],
             },
             "InsertOn": {
+                values: [],
             },
             "UpdateOn": {
-                ["list", "UnqualifiedIdentifier"]
+                values: ["list", "UnqualifiedIdentifier"],
             },
+        },
     },
     "ModuleArgument": {
         constructors: {
             "ModuleArgument": {
-                "string"
+                values: ["string"],
             },
+        },
     },
     "QualifiedTableName": {
         constructors: {
             "TableNoIndexedBy": {
-                "SinglyQualifiedIdentifier"
+                values: ["SinglyQualifiedIdentifier"],
             },
             "TableIndexedBy": {
-                "SinglyQualifiedIdentifier" "UnqualifiedIdentifier"
+                values: ["SinglyQualifiedIdentifier", "UnqualifiedIdentifier"],
             },
             "TableNotIndexed": {
-                "SinglyQualifiedIdentifier"
+                values: ["SinglyQualifiedIdentifier"],
             },
+        },
     },
     "OrderingTerm": {
         constructors: {
             "OrderingTerm": {
-                "Expression" "MaybeCollation" "MaybeAscDesc"
+                values: ["Expression", "MaybeCollation", "MaybeAscDesc"],
             },
+        },
     },
     "PragmaBody": {
         constructors: {
             "EmptyPragmaBody": {
+                values: [],
             },
             "EqualsPragmaBody": {
-                "PragmaValue"
+                values: ["PragmaValue"],
             },
             "CallPragmaBody": {
-                "PragmaValue"
+                values: ["PragmaValue"],
             },
+        },
     },
     "PragmaValue": {
         constructors: {
             "SignedIntegerPragmaValue": {
-                "MaybeSign" "integer"
+                values: ["MaybeSign", "integer"],
             },
             "SignedFloatPragmaValue": {
-                "MaybeSign" "NonnegativeDouble"
+                values: ["MaybeSign", "NonnegativeDouble"],
             },
             "NamePragmaValue": {
-                "UnqualifiedIdentifier"
+                values: ["UnqualifiedIdentifier"],
             },
             "StringPragmaValue": {
-                "string"
+                values: ["string"],
             },
+        },
     },
     "CreateTableBody": {
         constructors: {
             "ColumnsAndConstraints": {
-                ["oneOrMore", "ColumnDefinition"] ["list", "TableConstraint"]
+                values: [["oneOrMore", "ColumnDefinition"], ["list", "TableConstraint"]],
             },
             "AsSelect": {
-                (Select)
+                values: [["Statement", "Select"]],
             },
+        },
     },
     "InsertHead": {
         constructors: {
             "InsertNoAlternative": {
+                values: [],
             },
             "InsertOrRollback": {
+                values: [],
             },
             "InsertOrAbort": {
+                values: [],
             },
             "InsertOrReplace": {
+                values: [],
             },
             "InsertOrFail": {
+                values: [],
             },
             "InsertOrIgnore": {
+                values: [],
             },
             "Replace": {
+                values: [],
             },
+        },
+    },
     "InsertBody": {
         constructors: {
             "InsertValues": {
-                ["list", "UnqualifiedIdentifier"] ["oneOrMore", "Expression"]
+                values: [["list", "UnqualifiedIdentifier"], ["oneOrMore", "Expression"]],
             },
             "InsertSelect": {
-                ["list", "UnqualifiedIdentifier"] (Select)
+                values: [["list", "UnqualifiedIdentifier"], "Select"],
             },
             "InsertDefaultValues": {
+                values: [],
             },
+        },
+    },
     "UpdateHead": {
         constructors: {
             "UpdateNoAlternative": {
+                values: [],
             },
             "UpdateOrRollback": {
+                values: [],
             },
             "UpdateOrAbort": {
+                values: [],
             },
             "UpdateOrReplace": {
+                values: [],
             },
             "UpdateOrFail": {
+                values: [],
             },
             "UpdateOrIgnore": {
+                values: [],
             },
+        },
+    },
     "Distinctness": {
         constructors: {
             "NoDistinctness": {
+                values: [],
             },
             "Distinct": {
+                values: [],
             },
             "All": {
+                values: [],
             },
+        },
+    },
     "MaybeHaving": {
         constructors: {
             "NoHaving": {
+                values: [],
             },
             "Having": {
-                "Expression"
+                values: ["Expression"],
             },
+        },
+    },
     "MaybeAs": {
         constructors: {
             "NoAs": {
+                values: [],
             },
             "As": {
-                "UnqualifiedIdentifier"
+                values: ["UnqualifiedIdentifier"],
             },
             "ElidedAs": {
-                "UnqualifiedIdentifier"
+                values: ["UnqualifiedIdentifier"],
             },
+        },
+    },
     "CompoundOperator": {
         constructors: {
             "Union": {
+                values: [],
             },
             "UnionAll": {
+                values: [],
             },
             "Intersect": {
+                values: [],
             },
             "Except": {
+                values: [],
             },
+        },
+    },
     "SelectCore": {
         constructors: {
             "SelectCore": {
-                "Distinctness" ["oneOrMore", "ResultColumn"] ["maybe", "FromClause"] ["maybe", "WhereClause"] ["maybe", "GroupClause"]
+                values: ["Distinctness", ["oneOrMore", "ResultColumn"], ["maybe", "FromClause"],
+                         ["maybe", "WhereClause"], ["maybe", "GroupClause"]],
             },
+        },
+    },
     "ResultColumn": {
         constructors: {
             "Star": {
+                values: [],
             },
             "TableStar": {
-                "UnqualifiedIdentifier"
+                values: ["UnqualifiedIdentifier"],
             },
             "Result": {
-                "Expression" "MaybeAs"
+                values: ["Expression", "MaybeAs"],
             },
+        },
+    },
     "JoinSource": {
         constructors: {
             "JoinSource": {
-                "SingleSource" ["list", ["triple", "JoinOperation", "SingleSource", "JoinConstraint"]]
+                values: ["SingleSource",
+                         ["list", ["tuple", "JoinOperation", "SingleSource", "JoinConstraint"]]],
             },
+        },
+    },
     "SingleSource": {
         constructors: {
             "TableSource": {
-                "SinglyQualifiedIdentifier" "MaybeAs" "MaybeIndexedBy"
+                values: ["SinglyQualifiedIdentifier", "MaybeAs", "MaybeIndexedBy"],
             },
             "SelectSource": {
-                (Select) "MaybeAs"
+                values: [["Statement", "Select"], "MaybeAs"],
             },
             "SubjoinSource": {
-                "JoinSource"
+                values: ["JoinSource"],
             },
+        },
+    },
     "JoinOperation": {
         constructors: {
             "Comma": {
+                values: [],
             },
             "Join": {
+                values: [],
             },
             "OuterJoin": {
+                values: [],
             },
             "LeftJoin": {
+                values: [],
             },
             "LeftOuterJoin": {
+                values: [],
             },
             "InnerJoin": {
+                values: [],
             },
             "CrossJoin": {
+                values: [],
             },
             "NaturalJoin": {
+                values: [],
             },
             "NaturalOuterJoin": {
+                values: [],
             },
             "NaturalLeftJoin": {
+                values: [],
             },
             "NaturalLeftOuterJoin": {
+                values: [],
             },
             "NaturalInnerJoin": {
+                values: [],
             },
             "NaturalCrossJoin": {
+                values: [],
             },
+        },
+    },
     "JoinConstraint": {
         constructors: {
             "NoConstraint": {
+                values: [],
             },
             "On": {
-                "Expression"
+                values: ["Expression"],
             },
             "Using": {
-                ["oneOrMore", "UnqualifiedIdentifier"]
+                values: ["oneOrMore", "UnqualifiedIdentifier"],
             },
+        },
+    },
     "MaybeIndexedBy": {
         constructors: {
             "NoIndexedBy": {
+                values: [],
             },
             "IndexedBy": {
-                "UnqualifiedIdentifier"
+                values: ["UnqualifiedIdentifier"],
             },
             "NotIndexed": {
+                values: [],
             },
+        },
+    },
     "FromClause": {
         constructors: {
             "From": {
-                "JoinSource"
+                values: ["JoinSource"],
             },
+        },
+    },
     "WhereClause": {
         constructors: {
             "Where": {
-                "Expression"
+                values: ["Expression"],
             },
+        },
+    },
     "GroupClause": {
         constructors: {
             "GroupBy": {
-                ["oneOrMore", "OrderingTerm"] "MaybeHaving"
+                values: ["oneOrMore", "OrderingTerm"], "MaybeHaving"
             },
+        },
+    },
     "OrderClause": {
         constructors: {
             "OrderBy": {
-                ["oneOrMore", "OrderingTerm"]
+                values: ["oneOrMore", "OrderingTerm"],
             },
+        },
+    },
     "LimitClause": {
         constructors: {
             "Limit": {
-                "integer"
+                values: ["integer"],
             },
             "LimitOffset": {
-                "integer" "integer"
+                values: ["integer", "integer"],
             },
             "LimitComma": {
-                "integer" "integer"
+                values: ["integer", "integer"],
             },
+        },
+    },
     "WhenClause": {
         constructors: {
             "When": {
-                "Expression"
+                values: ["Expression"],
             },
+        },
+    },
     "ConflictClause": {
         constructors: {
             "OnConflictRollback": {
+                values: [],
             },
             "OnConflictAbort": {
+                values: [],
             },
             "OnConflictFail": {
+                values: [],
             },
             "OnConflictIgnore": {
+                values: [],
             },
             "OnConflictReplace": {
+                values: [],
             },
+        },
+    },
     "ForeignKeyClause": {
         constructors: {
             "References": {
-                "UnqualifiedIdentifier" ["list", "UnqualifiedIdentifier"] ["list", "ForeignKeyClauseActionOrMatchPart"] "MaybeForeignKeyClauseDeferrablePart"
+                values: ["UnqualifiedIdentifier", ["list", "UnqualifiedIdentifier"],
+                         ["list", "ForeignKeyClauseActionOrMatchPart"],
+                         "MaybeForeignKeyClauseDeferrablePart"],
             },
+        },
+    },
     "ForeignKeyClauseActionOrMatchPart": {
         constructors: {
             "OnDelete": {
-                "ForeignKeyClauseActionPart"
+                values: ["ForeignKeyClauseActionPart"],
             },
             "OnUpdate": {
-                "ForeignKeyClauseActionPart"
+                values: ["ForeignKeyClauseActionPart"],
             },
             "ReferencesMatch": {
-                "UnqualifiedIdentifier"
+                values: ["UnqualifiedIdentifier"],
             },
+        },
+    },
     "ForeignKeyClauseActionPart": {
         constructors: {
             "SetNull": {
+                values: [],
             },
             "SetDefault": {
+                values: [],
             },
             "Cascade": {
+                values: [],
             },
             "Restrict": {
+                values: [],
             },
             "NoAction": {
+                values: [],
             },
+        },
+    },
     "MaybeForeignKeyClauseDeferrablePart": {
         constructors: {
             "NoDeferrablePart": {
+                values: [],
             },
             "Deferrable": {
-                "MaybeInitialDeferralStatus"
+                values: ["MaybeInitialDeferralStatus"],
             },
             "NotDeferrable": {
-                "MaybeInitialDeferralStatus"
+                values: ["MaybeInitialDeferralStatus"],
             },
+        },
+    },
     "MaybeInitialDeferralStatus": {
         constructors: {
             "NoInitialDeferralStatus": {
+                values: [],
             },
             "InitiallyDeferred": {
+                values: [],
             },
             "InitiallyImmediate": {
+                values: [],
             },
+        },
+    },
     "CommitHead": {
         constructors: {
             "CommitCommit": {
+                values: [],
             },
             "CommitEnd": {
+                values: [],
+            },
+        },
+    },
     "MaybeTransaction": {
         constructors: {
             "ElidedTransaction": {
+                values: [],
             },
             "Transaction": {
+                values: [],
+            },
+        },
+    },
     "MaybeTransactionType": {
         constructors: {
             "NoTransactionType": {
+                values: [],
             },
             "Deferred": {
+                values: [],
             },
             "Immediate": {
+                values: [],
             },
             "Exclusive": {
+                values: [],
+            },
+        },
+    },
     "MaybeDatabase": {
         constructors: {
             "ElidedDatabase": {
+                values: [],
             },
             "Database": {
+                values: [],
+            },
+        },
+    },
     "MaybeSavepoint": {
         constructors: {
             "NoSavepoint": {
+                values: [],
             },
             "To": {
-                "UnqualifiedIdentifier"
+                values: ["UnqualifiedIdentifier"],
             },
             "ToSavepoint": {
-                "UnqualifiedIdentifier"
+                values: ["UnqualifiedIdentifier"],
             },
+        },
+    },
     "MaybeReleaseSavepoint": {
         constructors: {
             "ElidedReleaseSavepoint": {
-                "UnqualifiedIdentifier"
+                values: ["UnqualifiedIdentifier"],
             },
             "ReleaseSavepoint": {
-                "UnqualifiedIdentifier"
+                values: ["UnqualifiedIdentifier"],
             },
+        },
+    },
     "StatementList": {
         constructors: {
             "StatementList": {
-                ["list", "AnyStatement"]
+                values: ["list", "AnyStatement"],
             },
+        },
+    },
     "AnyStatement": {
         constructors: {
             "Statement": {
-                "Statement"
+                values: ["Statement"],
             },
+        },
+    },
     "ExplainableStatement": {
         constructors: {
             "ExplainableStatement": {
-                "Statement"
+                values: ["Statement"],
             },
+        },
+    },
     "TriggerStatement": {
         constructors: {
             "TriggerStatement": {
-                "Statement"
+                values: ["Statement"],
             },
+        },
+    },
     "UnqualifiedIdentifier": {
         constructors: {
             "UnqualifiedIdentifier": {
-                "string"
+                values: ["string"],
             },
+        },
+    },
     "SinglyQualifiedIdentifier": {
         constructors: {
             "SinglyQualifiedIdentifier": {
-                ["maybe", "string"] "string"
+                values: ["maybe", "string"], "string"
             },
+        },
+    },
     "DoublyQualifiedIdentifier": {
         constructors: {
             "DoublyQualifiedIdentifier": {
-                ["maybe", ["pair", "string", ["maybe", "string"]]], "string"
+                values: ["maybe", ["tuple", "string", ["maybe", "string"]]],
+                         "string"
             },
         },
-/*
-data Statement level triggerable valueReturning which where
-    Explain
-        :: ExplainableStatement
-        -> Statement L1 NT NS Explain'
-    ExplainQueryPlan
-        :: ExplainableStatement
-        -> Statement L1 NT NS ExplainQueryPlan'
-    AlterTable
-        :: SinglyQualifiedIdentifier
-        -> AlterTableBody
-        -> Statement L0 NT NS AlterTable'
-    Analyze
-        :: SinglyQualifiedIdentifier
-        -> Statement L0 NT NS Analyze'
-    Attach
-        :: MaybeDatabase
-        -> String
-        -> UnqualifiedIdentifier
-        -> Statement L0 NT NS Attach'
-    Begin
-        :: MaybeTransactionType
-        -> MaybeTransaction
-        -> Statement L0 NT NS Begin'
-    Commit
-        :: CommitHead
-        -> MaybeTransaction
-        -> Statement L0 NT NS Commit'
-    CreateIndex
-        :: MaybeUnique
-        -> MaybeIfNotExists
-        -> SinglyQualifiedIdentifier
-        -> UnqualifiedIdentifier
-        -> ["oneOrMore", "IndexedColumn"]
-        -> Statement L0 NT NS CreateIndex'
-    CreateTable
-        :: MaybeTemporary
-        -> MaybeIfNotExists
-        -> SinglyQualifiedIdentifier
-        -> CreateTableBody
-        -> Statement L0 NT NS CreateTable'
-    CreateTrigger
-        :: MaybeTemporary
-        -> MaybeIfNotExists
-        -> SinglyQualifiedIdentifier
-        -> TriggerTime
-        -> TriggerCondition
-        -> UnqualifiedIdentifier
-        -> MaybeForEachRow
-        -> ["maybe", "WhenClause"]
-        -> ["oneOrMore", "TriggerStatement"]
-        -> Statement L0 NT NS CreateTrigger'
-    CreateView
-        :: MaybeTemporary
-        -> MaybeIfNotExists
-        -> SinglyQualifiedIdentifier
-        -> (Statement L0 T S Select')
-        -> Statement L0 NT NS CreateView'
-    CreateVirtualTable
-        :: SinglyQualifiedIdentifier
-        -> UnqualifiedIdentifier
-        -> ["list", "ModuleArgument"]
-        -> Statement L0 NT NS CreateVirtualTable'
-    Delete
-        :: QualifiedTableName
-        -> ["maybe", "WhereClause"]
-        -> Statement L0 T NS Delete'
-    DeleteLimited
-        :: QualifiedTableName
-        -> ["maybe", "WhereClause"]
-        -> ["maybe", "OrderClause"]
-        -> LimitClause
-        -> Statement L0 NT NS DeleteLimited'
-    Detach
-        :: MaybeDatabase
-        -> UnqualifiedIdentifier
-        -> Statement L0 NT NS Detach'
-    DropIndex
-        :: MaybeIfExists
-        -> SinglyQualifiedIdentifier
-        -> Statement L0 NT NS DropIndex'
-    DropTable
-        :: MaybeIfExists
-        -> SinglyQualifiedIdentifier
-        -> Statement L0 NT NS DropTable'
-    DropTrigger
-        :: MaybeIfExists
-        -> SinglyQualifiedIdentifier
-        -> Statement L0 NT NS DropTrigger'
-    DropView
-        :: MaybeIfExists
-        -> SinglyQualifiedIdentifier
-        -> Statement L0 NT NS DropView'
-    Insert
-        :: InsertHead
-        -> SinglyQualifiedIdentifier
-        -> InsertBody
-        -> Statement L0 T NS Insert'
-    Pragma
-        :: SinglyQualifiedIdentifier
-        -> PragmaBody
-        -> Statement L0 NT NS Pragma'
-    Reindex
-        :: SinglyQualifiedIdentifier
-        -> Statement L0 NT NS Reindex'
-    Release
-        :: MaybeReleaseSavepoint
-        -> UnqualifiedIdentifier
-        -> Statement L0 NT NS Release'
-    Rollback
-        :: MaybeTransaction
-        -> MaybeSavepoint
-        -> Statement L0 NT NS Rollback'
-    Savepoint
-        :: UnqualifiedIdentifier
-        -> Statement L0 NT NS Savepoint'
-    Select
-        :: SelectCore
-        -> [(CompoundOperator, SelectCore)]
-        -> ["maybe", "OrderClause"]
-        -> ["maybe", "LimitClause"]
-        -> Statement L0 T S Select'
-    Update
-        :: UpdateHead
-        -> QualifiedTableName
-        -> (OneOrMore (UnqualifiedIdentifier, Expression))
-        -> ["maybe", "WhereClause"]
-        -> Statement L0 T NS Update'
-    UpdateLimited
-        :: UpdateHead
-        -> QualifiedTableName
-        -> (OneOrMore (UnqualifiedIdentifier, Expression))
-        -> ["maybe", "WhereClause"]
-        -> ["maybe", "OrderClause"]
-        -> LimitClause
-        -> Statement L0 NT NS UpdateLimited'
-    Vacuum
-        :: Statement L0 NT NS Vacuum'
-*/
+    },
+    "Statement": {
+        constructors: {
+            "Explain": {
+                values: ["ExplainableStatement"],
+            },
+            "ExplainQueryPlan": {
+                values: ["ExplainableStatement"],
+            },
+            "AlterTable": {
+                values: ["SinglyQualifiedIdentifier", "AlterTableBody"],
+            },
+            "Analyze": {
+                values: ["SinglyQualifiedIdentifier"],
+            },
+            "Attach": {
+                values: ["MaybeDatabase", "string", "UnqualifiedIdentifier"],
+            },
+            "Begin": {
+                values: ["MaybeTransactionType", "MaybeTransaction"],
+            },
+            "Commit": {
+                values: ["CommitHead", "MaybeTransaction"],
+            },
+            "CreateIndex": {
+                values: ["MaybeUnique", "MaybeIfNotExists",
+                         "SinglyQualifiedIdentifier", "UnqualifiedIdentifier",
+                         ["oneOrMore", "IndexedColumn"]],
+            },
+            "CreateTable": {
+                values: ["MaybeTemporary", "MaybeIfNotExists",
+                         "SinglyQualifiedIdentifier", "CreateTableBody"],
+            },
+            "CreateTrigger": {
+                values: ["MaybeTemporary", "MaybeIfNotExists",
+                         "SinglyQualifiedIdentifier", "TriggerTime",
+                         "TriggerCondition", "UnqualifiedIdentifier",
+                         "MaybeForEachRow", ["maybe", "WhenClause"],
+                         ["oneOrMore", "TriggerStatement"]],
+            },
+            "CreateView": {
+                values: ["MaybeTemporary", "MaybeIfNotExists",
+                         "SinglyQualifiedIdentifier", ["Statement", "Select"]],
+            },
+            "CreateVirtualTable": {
+                values: ["SinglyQualifiedIdentifier", "UnqualifiedIdentifier",
+                         ["list", "ModuleArgument"]],
+            },
+            "Delete": {
+                values: ["QualifiedTableName", ["maybe", "WhereClause"]],
+            },
+            "DeleteLimited": {
+                values: ["QualifiedTableName", ["maybe", "WhereClause"],
+                         ["maybe", "OrderClause"], "LimitClause"],
+            },
+            "Detach": {
+                values: ["MaybeDatabase", "UnqualifiedIdentifier"],
+            },
+            "DropIndex": {
+                values: ["MaybeIfExists", "SinglyQualifiedIdentifier"],
+            },
+            "DropTable": {
+                values: ["MaybeIfExists", "SinglyQualifiedIdentifier"],
+            },
+            "DropTrigger": {
+                values: ["MaybeIfExists", "SinglyQualifiedIdentifier"],
+            },
+            "DropView": {
+                values: ["MaybeIfExists", "SinglyQualifiedIdentifier"],
+            },
+            "Insert": {
+                values: ["InsertHead", "SinglyQualifiedIdentifier",
+                         "InsertBody"],
+            },
+            "Pragma": {
+                values: ["SinglyQualifiedIdentifier", "PragmaBody"],
+            },
+            "Reindex": {
+                values: ["SinglyQualifiedIdentifier"],
+            },
+            "Release": {
+                values: ["MaybeReleaseSavepoint", "UnqualifiedIdentifier"],
+            },
+            "Rollback": {
+                values: ["MaybeTransaction", "MaybeSavepoint"],
+            },
+            "Savepoint": {
+                values: ["UnqualifiedIdentifier"],
+            },
+            "Select": {
+                values: ["SelectCore",
+                         ["tuple", "CompoundOperator", "SelectCore"],
+                         ["maybe", "OrderClause"], ["maybe", "LimitClause"]],
+            },
+            "Update": {
+                values: ["UpdateHead", "QualifiedTableName",
+                         ["oneOrMore",
+                          ["tuple", "UnqualifiedIdentifier", "Expression"]],
+                         ["maybe", "WhereClause"]],
+            },
+            "UpdateLimited": {
+                values: ["UpdateHead", "QualifiedTableName",
+                         ["oneOrMore",
+                          ["tuple", "UnqualifiedIdentifier", "Expression"]],
+                         ["maybe", "WhereClause"], ["maybe", "OrderClause"],
+                         "LimitClause"],
+            },
+            "Vacuum": {
+            },
+        },
+    },
 };
 
 _.each(SQL.AST, function(astType, astTypeName) {
