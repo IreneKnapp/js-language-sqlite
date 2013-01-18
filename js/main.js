@@ -97,7 +97,7 @@ SQL.AST = {
             "TypeAffinityNone": {
                 values: [],
                 showTokens: function() {
-                    return SQL.showTokens(["NoTypeName"]]);
+                    return SQL.showTokens(["NoTypeName"]);
                 },
             },
         },
@@ -417,13 +417,13 @@ SQL.AST = {
                 values: ["Expression", "SinglyQualifiedIdentifier"],
             },
             "ExpressionSubquery": {
-                values: [(Select)],
+                values: [["Statement", "Select"]],
             },
             "ExpressionExistsSubquery": {
-                values: [(Select)],
+                values: [["Statement", "Select"]],
             },
             "ExpressionNotExistsSubquery": {
-                values: [(Select)],
+                values: [["Statement", "Select"]],
             },
             "ExpressionCase": {
                 values: ["MaybeSwitchExpression", ["oneOrMore", "CasePair"], "Else"],
@@ -997,7 +997,7 @@ SQL.AST = {
     "GroupClause": {
         constructors: {
             "GroupBy": {
-                values: ["oneOrMore", "OrderingTerm"], "MaybeHaving"
+                values: [["oneOrMore", "OrderingTerm"], "MaybeHaving"],
             },
         },
     },
@@ -1221,15 +1221,15 @@ SQL.AST = {
     "SinglyQualifiedIdentifier": {
         constructors: {
             "SinglyQualifiedIdentifier": {
-                values: ["maybe", "string"], "string"
+                values: [["maybe", "string"], "string"],
             },
         },
     },
     "DoublyQualifiedIdentifier": {
         constructors: {
             "DoublyQualifiedIdentifier": {
-                values: ["maybe", ["tuple", "string", ["maybe", "string"]]],
-                         "string"
+                values: [["maybe", ["tuple", "string", ["maybe", "string"]]],
+                         "string"],
             },
         },
     },
